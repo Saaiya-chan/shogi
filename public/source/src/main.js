@@ -1,6 +1,6 @@
 import {COACH_REVISION} from './coach-contract.js';
 import './style.css';
-import {CoachClient,replyKey} from './coach-client.js';
+import {CoachClient,replyKey,replyMatches} from './coach-client.js';
 import { DEMO_USI, moveCommentary, createSimulation, stepSimulation } from './move-coach.js';
 import { chatHTML, rememberChatDraft, beginQuestion, finishQuestion, suggestedQuestions } from './chat-view.js';
 import { createIcons, LayoutDashboard, Swords, BookOpen, Bookmark, Settings2, ArrowUpRight, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw, RefreshCw, Lightbulb, Sparkles, ArrowRight, Download, Upload, X, Check, Flag, Plus, Info, Play, Pause, Eye, Copy, CircleHelp, PanelLeftClose, NotebookPen, Cpu, Target } from 'lucide';
@@ -92,35 +92,35 @@ function refreshCoaching(){
  if(focused&&$('#chat-input')){$('#chat-input').focus();$('#chat-input').setSelectionRange(...selection)}
 }
 async function queueMoveExplanation(index,retry=false,automatic=false){
- if(automatic&&!coach.autoExplain)return;
+ if(automatic&&!coach.canAutoExplain())return;
  const generation=coach.autoGeneration;
  const record=state.records[index];if(!record)return;
  const before=index?state.records[index-1].sfen:state.start;const human=state.human;const id=sessionId;
  await coachingReady;
- if(!coach.configured||id!==sessionId||state.records[index]!==record||(automatic&&(!coach.autoExplain||generation!==coach.autoGeneration)))return;
+ if(!coach.configured||id!==sessionId||state.records[index]!==record||(automatic&&!coach.canAutoExplain(generation)))return;
  const model=coach.model;const key=replyKey(human,before,record,model);
  const cached=coach.cached(key);
  if(cached&&!retry){record.aiCoach={...cached,sfen:record.sfen,usi:record.usi,human};save();refreshCoaching();return}
  if(moveStates.get(key)?.status==='pending')return;
- if(record.aiCoach?.revision===COACH_REVISION&&record.aiCoach?.human===human&&record.aiCoach?.sfen===record.sfen&&record.aiCoach?.usi===record.usi&&!retry)return;
+ if(replyMatches(record.aiCoach,model)&&record.aiCoach?.human===human&&record.aiCoach?.sfen===record.sfen&&record.aiCoach?.usi===record.usi&&!retry)return;
  const ticket={status:'pending',automatic,requested:false};
  const clear=()=>{if(moveStates.get(key)===ticket)moveStates.delete(key)};
  moveStates.set(key,ticket);refreshCoaching();
  const valid=()=>id===sessionId&&state.records[index]===record&&state.human===human&&coach.model===model;
- const permitted=()=>valid()&&(!automatic||(coach.autoExplain&&generation===coach.autoGeneration));
+ const permitted=()=>valid()&&(!automatic||coach.canAutoExplain(generation));
  const job=async()=>{
   if(!permitted()){clear();refreshCoaching();return}
-  if(coach.blockedMessage&&!retry){moveStates.set(key,{status:'error',error:coach.blockedMessage});refreshCoaching();return}
+  if(coach.blockedMessage&&automatic){moveStates.set(key,{status:'error',error:coach.blockedMessage});refreshCoaching();return}
   try{
    const p=posFrom(record.sfen);
    const a=p.outcome()?null:await engine.analyze(record.sfen,Math.min(state.time,1500),3);
    if(!permitted()){clear();refreshCoaching();return}
    if(a)record.coachAnalysis={sfen:a.sfen,entries:a.entries.map(e=>({...e,pv:e.pv.slice(0,12)}))};
    ticket.requested=true;
-   const reply=await coach.request({kind:'move',sfen:record.sfen,beforeSfen:before,usi:record.usi,human,analysis:record.coachAnalysis,thought:record.note||''},model);
+   const reply=await coach.request({kind:'move',sfen:record.sfen,beforeSfen:before,usi:record.usi,human,analysis:record.coachAnalysis,thought:record.note||''},model,{automatic,generation});
    coach.remember(key,reply,model);
-   if(valid()){record.aiCoach={...reply,sfen:record.sfen,usi:record.usi,human};moveStates.set(key,{status:'done'});save();refreshCoaching()}
-  }catch(e){if(valid()){moveStates.set(key,{status:'error',error:e.name==='TimeoutError'?'解説の取得に時間がかかりました。再試行してください。':e.message});refreshCoaching()}else clear()}
+   if(permitted()){record.aiCoach={...reply,sfen:record.sfen,usi:record.usi,human};moveStates.set(key,{status:'done'});save();refreshCoaching()}else{clear();refreshCoaching()}
+  }catch(e){if(!permitted()){clear();refreshCoaching();return}if(valid()){moveStates.set(key,{status:'error',error:e.name==='TimeoutError'?'解説の取得に時間がかかりました。再試行してください。':e.message});refreshCoaching()}else clear()}
  };
  const work=explanationQueue.then(job);explanationQueue=work.catch(()=>{});
 }
@@ -190,8 +190,14 @@ function endDemo(){
 }
 
 function go(cursor){if(busy)return;stopPlayback();state.cursor=Math.max(0,Math.min(state.records.length,cursor));selected=null;analysis=null;hint=0;pvPreview=null;render()}
-document.addEventListener('click',async e=>{const el=e.target.closest('button,a');if(!el)return;if(el.disabled)return;if(el.dataset.explain!==undefined){queueMoveExplanation(Number(el.dataset.explain)-1,true);return}if(el.dataset.simulate!==undefined){await startMoveSimulation(Number(el.dataset.simulate));return}if(el.dataset.simStep!==undefined){seekSimulation(Number(el.dataset.simStep));return}if(el.dataset.question!==undefined){stopPlayback();const question=suggestedQuestions[Number(el.dataset.question)];rememberChatDraft(state.human+'|'+makeSfen(position()),question);$('#chat-input').value=question;$('.chat-send').disabled=questionBusy||!coach.configured;$('#chat-input').focus();return}if(el.dataset.page){stopPlayback();e.preventDefault();page=el.dataset.page;render();return}if(el.dataset.action){if(!['sim-play','sim-prev','sim-next','sim-first','pv-prev','pv-next'].includes(el.dataset.action))stopPlayback();await actions[el.dataset.action]?.();return}if(el.dataset.mode){if(busy)return;stopPlayback();state.mode=el.dataset.mode;pvPreview=null;selected=null;save();render();if(state.mode==='play'&&position().turn!==state.human&&state.cursor===state.records.length&&!result())await aiMove();return}if(el.dataset.tab){stopPlayback();tab=el.dataset.tab;render();return}if(el.dataset.cursor!==undefined){go(Number(el.dataset.cursor));return}if(el.dataset.pv!==undefined){stopPlayback();const start=analysis.sfen;const p=posFrom(start);const line=pvLine(p,analysis.entries[Number(el.dataset.pv)].pv,20);pvPreview={start,line,step:1,sfen:line[0]?.sfen||start,sourcePly:state.cursor,playing:false};selected=null;render();return}if(el.dataset.loadNote){if(busy){toast('解析が終わるまでお待ちください');return}const n=state.notes.find(n=>n.id===el.dataset.loadNote);if(state.records.length&&!await confirmDialog('ノートの局面で研究しますか？','現在の棋譜がこの局面に置き換わります。必要なら先に棋譜を書き出してください。','局面を開く'))return;state.start=n.sfen;state.records=[];state.cursor=0;state.mode='study';state.result=null;analysis=null;pvPreview=null;state.draft=n.text;page='room';save();render();return}if(el.dataset.deleteNote){if(await confirmDialog('このノートを削除しますか？','削除したノートは元に戻せません。','削除する')){state.notes=state.notes.filter(n=>n.id!==el.dataset.deleteNote);save();render()}return}if(el.dataset.hand){if(busy||pvPreview)return;const p=position();if((state.mode==='play'&&p.turn!==state.human)||result())return;selected=selected===el.dataset.hand?null:el.dataset.hand;renderBoard();return}if(el.dataset.square!==undefined){if(busy||pvPreview)return;const p=position();if(state.mode==='play'&&state.cursor===state.records.length&&(p.turn!==state.human||result()))return;const to=Number(el.dataset.square);const piece=p.board.pieceAt(to);if(piece?.color===p.turn){selected=selected===to?null:to;renderBoard();return}if(selected===null)return;const m=typeof selected==='number'?{from:selected,to,promotion:false}:{role:selected,to};const promoted='from'in m?{...m,promotion:true}:null;const normalOK=p.isLegal(m),promOK=promoted&&p.isLegal(promoted);if(!normalOK&&!promOK){selected=null;renderBoard();toast('そこには動かせません');return}if(normalOK&&promOK){modal('この駒を成りますか？','<p>成りと不成を選んでください。</p>',`<button class="outline-btn" id="no-promote">不成</button><button class="primary-btn" id="yes-promote">成る</button>`);$('#no-promote').onclick=()=>{$('#dialog').close();playMove(m)};$('#yes-promote').onclick=()=>{$('#dialog').close();playMove(promoted)}}else await playMove(promOK?promoted:m)}});
-document.addEventListener('change',e=>{if(e.target.id==='coach-auto-explain'){coach.setAutoExplain(e.target.checked);if(!coach.autoExplain)for(const [key,job]of moveStates)if(job.automatic&&!job.requested)moveStates.delete(key);render();toast(coach.autoExplain?'これから指す双方の手を自動で解説します':'全自動解説をOFFにしました');return}if(e.target.id!=='coach-model')return;if(questionBusy){e.target.value=coach.model;return}if(coach.selectModel(e.target.value)){stopPlayback();render();toast(coach.selected.label+'に切り替えました。次の解説・質問から使います。')}});
+document.addEventListener('click',async e=>{const el=e.target.closest('button,a');if(!el)return;if(el.disabled)return;if(el.dataset.explain!==undefined){queueMoveExplanation(Number(el.dataset.explain)-1,el.dataset.regenerate==='true');return}if(el.dataset.simulate!==undefined){await startMoveSimulation(Number(el.dataset.simulate));return}if(el.dataset.simStep!==undefined){seekSimulation(Number(el.dataset.simStep));return}if(el.dataset.question!==undefined){stopPlayback();const question=suggestedQuestions[Number(el.dataset.question)];rememberChatDraft(state.human+'|'+makeSfen(position()),question);$('#chat-input').value=question;$('.chat-send').disabled=questionBusy||!coach.configured;$('#chat-input').focus();return}if(el.dataset.page){stopPlayback();e.preventDefault();page=el.dataset.page;render();return}if(el.dataset.action){if(!['sim-play','sim-prev','sim-next','sim-first','pv-prev','pv-next'].includes(el.dataset.action))stopPlayback();await actions[el.dataset.action]?.();return}if(el.dataset.mode){if(busy)return;stopPlayback();state.mode=el.dataset.mode;pvPreview=null;selected=null;save();render();if(state.mode==='play'&&position().turn!==state.human&&state.cursor===state.records.length&&!result())await aiMove();return}if(el.dataset.tab){stopPlayback();tab=el.dataset.tab;render();return}if(el.dataset.cursor!==undefined){go(Number(el.dataset.cursor));return}if(el.dataset.pv!==undefined){stopPlayback();const start=analysis.sfen;const p=posFrom(start);const line=pvLine(p,analysis.entries[Number(el.dataset.pv)].pv,20);pvPreview={start,line,step:1,sfen:line[0]?.sfen||start,sourcePly:state.cursor,playing:false};selected=null;render();return}if(el.dataset.loadNote){if(busy){toast('解析が終わるまでお待ちください');return}const n=state.notes.find(n=>n.id===el.dataset.loadNote);if(state.records.length&&!await confirmDialog('ノートの局面で研究しますか？','現在の棋譜がこの局面に置き換わります。必要なら先に棋譜を書き出してください。','局面を開く'))return;state.start=n.sfen;state.records=[];state.cursor=0;state.mode='study';state.result=null;analysis=null;pvPreview=null;state.draft=n.text;page='room';save();render();return}if(el.dataset.deleteNote){if(await confirmDialog('このノートを削除しますか？','削除したノートは元に戻せません。','削除する')){state.notes=state.notes.filter(n=>n.id!==el.dataset.deleteNote);save();render()}return}if(el.dataset.hand){if(busy||pvPreview)return;const p=position();if((state.mode==='play'&&p.turn!==state.human)||result())return;selected=selected===el.dataset.hand?null:el.dataset.hand;renderBoard();return}if(el.dataset.square!==undefined){if(busy||pvPreview)return;const p=position();if(state.mode==='play'&&state.cursor===state.records.length&&(p.turn!==state.human||result()))return;const to=Number(el.dataset.square);const piece=p.board.pieceAt(to);if(piece?.color===p.turn){selected=selected===to?null:to;renderBoard();return}if(selected===null)return;const m=typeof selected==='number'?{from:selected,to,promotion:false}:{role:selected,to};const promoted='from'in m?{...m,promotion:true}:null;const normalOK=p.isLegal(m),promOK=promoted&&p.isLegal(promoted);if(!normalOK&&!promOK){selected=null;renderBoard();toast('そこには動かせません');return}if(normalOK&&promOK){modal('この駒を成りますか？','<p>成りと不成を選んでください。</p>',`<button class="outline-btn" id="no-promote">不成</button><button class="primary-btn" id="yes-promote">成る</button>`);$('#no-promote').onclick=()=>{$('#dialog').close();playMove(m)};$('#yes-promote').onclick=()=>{$('#dialog').close();playMove(promoted)}}else await playMove(promOK?promoted:m)}});
+function updateAutoExplain(enabled,persist=true){
+ coach.setAutoExplain(enabled,persist);
+ if(!coach.autoExplain)for(const [key,job]of moveStates)if(job.automatic)moveStates.delete(key);
+ render();
+}
+window.addEventListener('storage',e=>{if(e.key==='kito-coach-auto-explain')updateAutoExplain(e.newValue==='true',false)});
+document.addEventListener('change',e=>{if(e.target.id==='coach-auto-explain'){updateAutoExplain(e.target.checked);toast(coach.autoExplain?'これから指す双方の手を自動で解説します':'全自動解説をOFFにしました');return}if(e.target.id!=='coach-model')return;if(questionBusy){e.target.value=coach.model;return}if(coach.selectModel(e.target.value)){stopPlayback();render();toast(coach.selected.label+'に切り替えました。次の解説・質問から使います。')}});
 document.addEventListener('focusin',e=>{if(e.target.id==='chat-input'&&pvPreview?.playing){stopPlayback();const btn=$('[data-action="sim-play"]');if(btn){btn.innerHTML=ico('Play');btn.setAttribute('aria-label','予想手順を再生');drawIcons()}}});
 document.addEventListener('input',e=>{if(e.target.id==='chat-input'){rememberChatDraft(state.human+'|'+makeSfen(position()),e.target.value);$('.chat-send').disabled=!e.target.value.trim()||questionBusy||!coach.configured}if(e.target.id==='thought'){state.draft=e.target.value;save()}});
 document.addEventListener('submit',e=>{if(e.target.id!=='chat-form')return;e.preventDefault();askCoach()});
