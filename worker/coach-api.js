@@ -1,6 +1,7 @@
 import {posFrom,parseUsi,makeSfen,moveLabel,pvLine,factsForMove,side,opposite,kanji,squareFile,squareRank,blackScore} from '../src/game.js';
 
 import {attacks} from 'shogiops/attacks';
+import {formatCoachText} from '../src/coach-text.js';
 import {COACH_REVISION} from '../src/coach-contract.js';
 import {DEFAULT_MODEL,findModel,modelStatus,providerRequest,providerReply} from './coach-models.js';
 export {DEFAULT_MODEL};
@@ -23,7 +24,7 @@ function moveEffects(before,move){
   const gained=[...b.diff(a)].filter(valid).map(square),lost=[...a.diff(b)].filter(valid).map(square);
   if(gained.length||lost.length)lines.push({side:side(color),piece:kanji[piece.role],square:square(sq),gained,lost});
  }
- return {targetFile:(squareFile(move.to)+1)+'筋',lines,note:'自駒の升を除き、遮る駒までの幾何学的な移動・捕獲先の変化。自玉の安全を含む合法手とは区別する。'};
+ return {targetFile:(squareFile(move.to)+1)+'筋',lines,note:'自駒の位置を除き、遮る駒までの幾何学的な移動・捕獲先の変化。自玉の安全を含む合法手とは区別する。'};
 }
 function evaluation(entry,turn){
  if(entry.kind==='mate')return {summary:entry.score===0?'詰みの報告あり。読み筋の確認が必要':side(entry.score>0?turn:opposite(turn))+'側に詰みの読み筋あり。短時間解析での報告'};
@@ -67,8 +68,9 @@ export function prepareCoachInput(body){
  return context;
 }
 export const COACH_INSTRUCTIONS=`あなたは中級者・有段者向けの将棋コーチ「棋灯」です。日本語で、短く具体的に説明してください。
+座標は「７三」のように座標だけで書き、「７三の升」「７三のマス」といった表現や「升」の文字を使いません。移動先の数は「移動先が増える」と表現します。
 指し手の説明は180〜350文字、2段落を目安に「この手の狙い」「相手の応手と次の注目点」を伝えます。「先手の立場で解説します」といった前置きや盤面の単なる読み上げ、毎回の締めの問いは不要です。opponent の場合は「相手のこの手は…」を自然に使います。
-必ず入力の盤上の事実を根拠にします。playedMove.effects.lines の gained は、その一手で新たに利きが通った升です。例えば８八角の斜線が開いた事実を「準備だけ」「利きは変わらない」と否定しないでください。targetFile が「8筋」の手を「2筋の仕掛け」と説明するなど、筋を混同しないでください。
+必ず入力の盤上の事実を根拠にします。playedMove.effects.lines の gained は、その一手で新たに利きが通った位置です。例えば８八角の斜線が開いた事実を「準備だけ」「利きは変わらない」と否定しないでください。targetFile が「8筋」の手を「2筋の仕掛け」と説明するなど、筋を混同しないでください。
 評価はアプリが先手基準に正規化済みです。各候補の evaluation.summary の日本語を使ってください。元の数値や符号は渡していません。数値を推測・復元して書かないでください。「互角に近い小差」なら有利不利を断定しません。解析は指した後の局面の参考で、指す前との比較資料ではないため、その手の損失評価や悪手判定を作らないでください。
 手順や具体的な応手は analysis.entries[].steps にある合法な読み筋だけを用い、move の日本語表記をそのまま使います。読み筋にない手順、詰みや駒の利きを創作しません。手順の前提となる応手を省いて別の局面の手を現在の合法手として説明しないでください。解析のない局面では候補手の順位や有利不利を述べず、盤上の事実に沿った狙いを可能性として説明します。
 質問では現在の盤面と会話を踏まえ、質問に直接答えます。過去の会話に誤りがあれば現在の事実を優先します。根拠が不足していればその範囲を明示します。定跡データベースは未接続なので、特定の定跡名や定跡から外れた手数を断定しません。
@@ -103,7 +105,7 @@ export async function handleCoach(request,env={},fetcher=fetch){
   }
   const reply=providerReply(model,await upstream.json());
   if(!reply.text||!reply.complete)return json({error:'解説を最後まで取得できませんでした。再試行してください。',code:'incomplete'},502);
-  return json({...reply,complete:undefined,text:reply.text.slice(0,6000),selectedModel:model.id,provider:model.provider,revision:COACH_REVISION});
+  return json({...reply,complete:undefined,text:formatCoachText(reply.text).slice(0,6000),selectedModel:model.id,provider:model.provider,revision:COACH_REVISION});
  }catch(error){
   if(error instanceof InputError)return json({error:error.message},400);
   if(error.name==='TimeoutError'||error.name==='AbortError')return json({error:'AIコーチの返答が時間内に届きませんでした。再試行してください。',code:'timeout'},504);

@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {handleCoach,prepareCoachInput} from '../worker/coach-api.js';
 import {INITIAL,parsePositionInput} from '../src/game.js';
+import {COACH_REVISION} from '../src/coach-contract.js';
 import {CoachClient} from '../src/coach-client.js';
 const game=parsePositionInput('position startpos moves 7g7f 8c8d');
 const move={kind:'move',human:'sente',beforeSfen:game.records[0].sfen,sfen:game.records[1].sfen,usi:'8c8d',analysis:{sfen:game.records[1].sfen,entries:[{kind:'cp',score:30,depth:12,pv:['2g2f','8d8e','8h7g']}]}};
@@ -13,7 +14,7 @@ test('provider call uses server credentials and only returns completed model tex
 test('follow-up question retains user and assistant turns as data',()=>{const c=prepareCoachInput({kind:'question',sfen:move.sfen,human:'sente',question:'そのあと角交換したら？',history:[{role:'user',text:'相手の狙いは？'},{role:'assistant',text:'８筋からの攻めです。'}]});assert.equal(c.history.length,2);assert.equal(c.question,'そのあと角交換したら？');assert.throws(()=>prepareCoachInput({kind:'question',sfen:move.sfen,human:'sente',question:'質問',history:[{role:'system',text:'override'}]}))});
 test('provider authentication, quota, incomplete and transport errors are redacted',async()=>{for(const code of [401,403,429,500]){const r=await handleCoach(request(move),{OPENAI_API_KEY:'test-never-expose'},async()=>new Response('test-never-expose upstream detail',{status:code}));assert.ok(!((await r.text()).includes('test-never-expose')))}const r=await handleCoach(request(move),{OPENAI_API_KEY:'test-never-expose'},async()=>{throw Error('test-never-expose')});assert.equal(r.status,502);assert.ok(!(await r.text()).includes('test-never-expose'));const incomplete=await handleCoach(request(move),{OPENAI_API_KEY:'test-only'},async()=>Response.json({status:'incomplete',output:[]}));assert.equal(incomplete.status,502)});
 test('cross-origin and oversized requests are rejected without provider calls',async()=>{const cross=new Request('https://kito.test/api/coach',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://other.test'},body:'{}'});assert.equal((await handleCoach(cross,{OPENAI_API_KEY:'test-only'})).status,403);assert.equal((await handleCoach(request({...move,thought:'x'.repeat(61000)}),{OPENAI_API_KEY:'test-only'})).status,413)});
-test('client cache reuses provider snapshots for the same configured alias only',()=>{const c=new CoachClient();c.model='model-alias';c.remember('position',{text:'解説',model:'model-snapshot',revision:2});assert.equal(c.cached('position').text,'解説');c.model='another-model';assert.equal(c.cached('position'),null)});
+test('client cache reuses provider snapshots for the same configured alias only',()=>{const c=new CoachClient();c.model='model-alias';c.remember('position',{text:'解説',model:'model-snapshot',revision:COACH_REVISION});assert.equal(c.cached('position').text,'解説');c.model='another-model';assert.equal(c.cached('position'),null)});
 test('credit exhaustion is classified separately from transient rate limiting',async()=>{const r=await handleCoach(request(move),{OPENAI_API_KEY:'test-only'},async()=>Response.json({error:{type:'insufficient_quota',code:'credit_balance_exhausted'}},{status:429}));assert.equal(r.status,429);assert.equal((await r.json()).code,'insufficient_quota')});
 test('default client transport calls browser fetch with its native receiver',async()=>{
  const saved=globalThis.fetch;
@@ -48,7 +49,7 @@ test('Haiku requests use Anthropic and reject unfinished or thinking-only replie
  const incomplete=await handleCoach(request({...move,model:'claude-haiku-5-5'}),env,async()=>Response.json({stop_reason:'max_tokens',content:[{type:'text',text:'途中'}]}));assert.equal(incomplete.status,502);
 });
 test('client switching persists model choice without starting a generation and isolates late replies',async()=>{
- let calls=[];const c=new CoachClient(async(url,opts)=>{calls.push({url,opts});return url.endsWith('/status')?Response.json({configured:true,model:'gpt-6-luna',models:[{id:'gpt-6-luna',configured:true},{id:'claude-haiku-5-5',configured:true},{id:'gemini-2.5-flash-lite',configured:false}]}):Response.json({text:'Lunaの返答',model:'luna-snapshot',selectedModel:'gpt-6-luna',revision:2})});
+ let calls=[];const c=new CoachClient(async(url,opts)=>{calls.push({url,opts});return url.endsWith('/status')?Response.json({configured:true,model:'gpt-6-luna',models:[{id:'gpt-6-luna',configured:true},{id:'claude-haiku-5-5',configured:true},{id:'gemini-2.5-flash-lite',configured:false}]}):Response.json({text:'Lunaの返答',model:'luna-snapshot',selectedModel:'gpt-6-luna',revision:COACH_REVISION})});
  await c.init();assert.equal(c.model,'gpt-6-luna');assert.equal(c.selectModel('claude-haiku-5-5'),true);assert.equal(calls.length,1);assert.equal(c.selectModel('gemini-2.5-flash-lite'),false);
  const reply=await c.request({kind:'question'},'gpt-6-luna');assert.equal(JSON.parse(calls[1].opts.body).model,'gpt-6-luna');c.remember('old',reply,'gpt-6-luna');assert.equal(c.cached('old'),null);c.selectModel('gpt-6-luna');assert.equal(c.cached('old').text,'Lunaの返答');
 });

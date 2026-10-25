@@ -3,9 +3,12 @@ export const replyKey=(human,before,record,model='')=>[human,before,record.usi,r
 export const replyMatches=(reply,model)=>!!reply&&reply.revision===COACH_REVISION&&(reply.configurationModel||reply.selectedModel||reply.model)===model;
 export class CoachClient {
  constructor(fetcher=(...args)=>fetch(...args)){
+  this.autoExplain=false;this.autoGeneration=0;
+  try{this.autoExplain=localStorage.getItem('kito-coach-auto-explain')==='true'}catch{}
   this.fetcher=fetcher;this.configured=false;this.model='';this.models=[];this.status='checking';this.cache=new Map();this.blocked=new Map();
   try{this.preferredModel=localStorage.getItem('kito-coach-model')||'';for(const [key,value]of JSON.parse(localStorage.getItem('kito-ai-replies-v1')||'[]'))if(typeof value?.text==='string'&&value.text.length<6000)this.cache.set(key,value)}catch{}
  }
+ setAutoExplain(enabled){this.autoExplain=enabled===true;this.autoGeneration++;try{localStorage.setItem('kito-coach-auto-explain',String(this.autoExplain))}catch{}}
  get selected(){return this.models.find(m=>m.id===this.model)}
  get providerLabel(){return this.selected?.providerLabel||'AIサービス'}
  get blockedMessage(){return this.blocked.get(this.model)||''}
