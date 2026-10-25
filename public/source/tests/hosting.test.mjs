@@ -1,0 +1,6 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {serveAsset} from '../worker/serve.js';
+const assets={'/index.html':{type:'text/html; charset=utf-8',data:btoa('<html lang="ja">棋灯</html>'.replace('棋灯','KITO'))},'/engine/model.wasm':{type:'application/wasm',data:Buffer.from([0,97,115,109]).toString('base64')}};
+test('document and wasm responses retain isolation headers and exact bytes',async()=>{for(const path of ['/','/engine/model.wasm']){const r=serveAsset(new Request('https://example.test'+path),assets);assert.equal(r.status,200);assert.equal(r.headers.get('Cross-Origin-Opener-Policy'),'same-origin');assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'),'require-corp')}const r=serveAsset(new Request('https://example.test/engine/model.wasm'),assets);assert.equal(r.headers.get('Content-Type'),'application/wasm');assert.deepEqual(new Uint8Array(await r.arrayBuffer()),new Uint8Array([0,97,115,109]))});
+test('head and missing assets do not return an HTML fallback',async()=>{const r=serveAsset(new Request('https://example.test/',{method:'HEAD'}),assets);assert.equal(await r.text(),'');assert.equal(serveAsset(new Request('https://example.test/missing.js'),assets).status,404);assert.equal(serveAsset(new Request('https://example.test/',{method:'POST'}),assets).status,405)});

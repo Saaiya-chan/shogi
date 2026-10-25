@@ -1,6 +1,21 @@
 {
-  "name":"shogi-coach", "version":"0.1.0", "private":true, "type":"module", "license":"GPL-3.0-or-later",
-  "scripts":{"dev":"vite --host 127.0.0.1 --port 5173","build":"node scripts/prepare.mjs && vite build","test":"node --test tests/*.test.mjs","preview":"vite preview --host 127.0.0.1 --port 5173"},
-  "dependencies":{"shogiops":"0.22.0","@mizarjp/yaneuraou.k-p":"7.6.3-alpha.0","lucide":"^0.468.0"},
-  "devDependencies":{"vite":"^7.1.0"}
+  "name": "shogi-coach",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "node scripts/prepare.mjs && vite build && node scripts/package-worker.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "preview": "node scripts/preview-worker.mjs"
+  },
+  "dependencies": {
+    "shogiops": "0.22.0",
+    "@mizarjp/yaneuraou.k-p": "7.6.3-alpha.0",
+    "lucide": "^0.468.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  }
 }

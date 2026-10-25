@@ -12,7 +12,7 @@ npm run build
 npm run dev
 ```
 
-http://127.0.0.1:5173 を通常のブラウザで開きます。初回の `npm run build` はエンジンを public にコピーします。エンジンには SharedArrayBuffer と COOP/COEP ヘッダーが必要です。Viteの開発・プレビュー、配信する `_headers` に設定があります。iframe内で動作しない場合は独立タブで開いてください。
+http://127.0.0.1:5173 を通常のブラウザで開きます。初回の `npm run build` はエンジンを public にコピーします。エンジンには SharedArrayBuffer と COOP/COEP ヘッダーが必要です。Vite開発サーバーと本番Workerの両方に設定があります。本番では静的ファイルをWorkerにまとめ、各応答にCOOP/COEPを付けます。`npm run preview` は配信物を http://127.0.0.1:5174 で確認できます。iframe内で動作しない場合は独立タブで開いてください。
 
 ## 機能
 
