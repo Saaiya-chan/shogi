@@ -1,6 +1,6 @@
 import {posFrom,parseUsi,makeSfen,moveLabel,pvLine,factsForMove,side,opposite,kanji,squareFile,squareRank} from '../src/game.js';
 
-export const DEFAULT_MODEL='gpt-5.4-mini';
+export const DEFAULT_MODEL='gpt-6-luna';
 const LIMIT=60000;
 const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','X-Content-Type-Options':'nosniff'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
@@ -69,7 +69,9 @@ export async function handleCoach(request,env={},fetcher=fetch){
   const all=new Uint8Array(bytes);let off=0;for(const chunk of chunks){all.set(chunk,off);off+=chunk.length}
   let body;try{body=JSON.parse(new TextDecoder().decode(all))}catch{throw new InputError('JSON形式を確認してください')}
   const context=prepareCoachInput(body);
-  const upstream=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+env.OPENAI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model:env.OPENAI_MODEL||DEFAULT_MODEL,instructions:COACH_INSTRUCTIONS,input:[{role:'user',content:JSON.stringify(context)}],store:false,max_output_tokens:1200}),signal:AbortSignal.timeout(45000)});
+  const model=env.OPENAI_MODEL||DEFAULT_MODEL;
+  // Keep per-move explanations quick and reserve the output budget for visible text.
+  const upstream=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+env.OPENAI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model,...(model==='gpt-6-luna'?{reasoning:{effort:'none'}}:{}),instructions:COACH_INSTRUCTIONS,input:[{role:'user',content:JSON.stringify(context)}],store:false,max_output_tokens:1200}),signal:AbortSignal.timeout(45000)});
   if(!upstream.ok){const code=upstream.status;let failure;try{failure=await upstream.json()}catch{}if(code===429&&(failure?.error?.type==='insufficient_quota'||['insufficient_quota','credit_balance_exhausted'].includes(failure?.error?.code)))return json({error:'OpenAI APIの利用残高が不足しています。APIの請求設定でクレジットをご確認ください。',code:'insufficient_quota'},429);const message=code===429?'APIの利用上限または混雑により、今は返答できません。少し待って再試行してください。':code===401||code===403?'AIコーチの接続認証を確認する必要があります。':'AIコーチに接続できませんでした。もう一度お試しください。';return json({error:message,code:'provider_'+code},code===429?429:502)}
   const data=await upstream.json();
   const text=(data.output||[]).flatMap(item=>item.type==='message'?(item.content||[]).filter(c=>c.type==='output_text').map(c=>c.text):[]).join('\n').trim();

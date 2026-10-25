@@ -36,7 +36,7 @@ http://127.0.0.1:5173 を通常のブラウザで開きます。初回の `npm r
 
 ローカルでは `.env.example` を参考に `.env.local` に `OPENAI_API_KEY` を設定して `npm run preview` を起動します。Viteの `/api/coach` は5174番のWorkerにプロキシします。キーに `VITE_` は付けません。キーはブラウザ・ソース配布・Gitに含めません。
 
-ホスティングでは同じ名前をSitesのサーバー環境変数にsecretとして登録し、再デプロイします。ローカルのenvファイルは自動アップロードされません。`GET /api/coach/status` は設定の有無とモデル名だけを返します。既定モデルは `gpt-5.4-mini`、サーバーの `OPENAI_MODEL` で変更できます。
+ホスティングでは同じ名前をSitesのサーバー環境変数にsecretとして登録し、再デプロイします。ローカルのenvファイルは自動アップロードされません。`GET /api/coach/status` は設定の有無とモデル名だけを返します。既定モデルは `gpt-6-luna`（速度と費用を抑えるため `reasoning.effort: none`）、サーバーの `OPENAI_MODEL` で変更できます。
 
 実APIは残高不足 `credit_balance_exhausted` が確認されており、実モデルによる解説品質の確認はクレジット追加後に必要です。残高不足では自動解説の連続リトライを停止します。
 
