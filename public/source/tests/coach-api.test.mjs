@@ -20,3 +20,35 @@ test('default client transport calls browser fetch with its native receiver',asy
  globalThis.fetch=function(){assert.equal(this,undefined);return Promise.resolve(Response.json({configured:true,model:'test'}))};
  try{const c=new CoachClient();assert.equal(await c.init(),true);assert.equal(c.status,'ready')}finally{globalThis.fetch=saved}
 });
+test('model catalog reports provider connection state without leaking credentials',async()=>{
+ const r=await handleCoach(new Request('https://kito.test/api/coach/status'),{OPENAI_API_KEY:'openai-secret',ANTHROPIC_API_KEY:'anthropic-secret',COACH_DEFAULT_MODEL:'claude-haiku-5-5'});
+ const out=await r.json();assert.equal(out.model,'claude-haiku-5-5');assert.equal(out.configured,true);
+ assert.equal(out.models.find(m=>m.id==='gemini-2.5-flash-lite').configured,false);
+ assert.ok(!JSON.stringify(out).includes('secret'));assert.ok(!JSON.stringify(out).includes('API_KEY'));
+ const missing=await handleCoach(new Request('https://kito.test/api/coach/status'),{OPENAI_API_KEY:'test-only',COACH_DEFAULT_MODEL:'claude-haiku-5-5'});
+ const m=await missing.json();assert.equal(m.model,'claude-haiku-5-5');assert.equal(m.configured,false);
+});
+test('unknown and unconfigured models never fall back or call a provider',async()=>{
+ for(const [model,status]of [['https://evil.test',400],['gpt-expensive-invented',400],['claude-haiku-5-5',503]]){
+  let calls=0;const r=await handleCoach(request({...move,model}),{OPENAI_API_KEY:'test-only'},async()=>{calls++;throw Error()});assert.equal(r.status,status);assert.equal(calls,0);
+ }
+});
+test('Gemini requests use its own key and only return completed visible text',async()=>{
+ let sent;const r=await handleCoach(request({...move,model:'gemini-2.5-flash-lite'}),{OPENAI_API_KEY:'wrong-key',GEMINI_API_KEY:'google-secret'},async(url,opts)=>{
+  sent={url,opts,body:JSON.parse(opts.body)};return Response.json({modelVersion:'gemini-test-snapshot',candidates:[{finishReason:'STOP',content:{parts:[{thought:true,text:'hidden reasoning'},{text:'相手は飛車先を伸ばしています。'}]}}],usageMetadata:{promptTokenCount:100,candidatesTokenCount:50,thoughtsTokenCount:10}});
+ });
+ const out=await r.json();assert.equal(r.status,200);assert.equal(out.selectedModel,'gemini-2.5-flash-lite');assert.equal(out.model,'gemini-test-snapshot');assert.equal(out.usage.output_tokens,60);assert.ok(!JSON.stringify(out).includes('hidden reasoning'));
+ assert.equal(sent.url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent');assert.equal(sent.opts.headers['x-goog-api-key'],'google-secret');assert.equal(sent.opts.headers.Authorization,undefined);assert.equal(sent.body.generationConfig.thinkingConfig.thinkingBudget,0);
+ assert.equal(JSON.parse(sent.body.contents[0].parts[0].text).playedMove.actor,'opponent');assert.ok(!JSON.stringify(out).includes('secret'));
+});
+test('Haiku requests use Anthropic and reject unfinished or thinking-only replies',async()=>{
+ let sent;const env={OPENAI_API_KEY:'wrong-key',ANTHROPIC_API_KEY:'anthropic-secret'};
+ const r=await handleCoach(request({...move,model:'claude-haiku-5-5'}),env,async(url,opts)=>{sent={url,opts,body:JSON.parse(opts.body)};return Response.json({model:'claude-haiku-5-5',stop_reason:'end_turn',content:[{type:'thinking',thinking:'hidden'},{type:'text',text:'相手は８筋を攻める準備です。'}],usage:{input_tokens:100,output_tokens:50}})});
+ const out=await r.json();assert.equal(r.status,200);assert.equal(sent.url,'https://api.anthropic.com/v1/messages');assert.equal(sent.opts.headers.Authorization,'Bearer anthropic-secret');assert.equal(sent.opts.headers['anthropic-version'],'2026-10-21');assert.equal(sent.body.thinking.type,'disabled');assert.equal(sent.body.max_tokens,1200);assert.equal(out.selectedModel,'claude-haiku-5-5');assert.ok(!JSON.stringify(out).includes('hidden'));assert.ok(!JSON.stringify(out).includes('secret'));
+ const incomplete=await handleCoach(request({...move,model:'claude-haiku-5-5'}),env,async()=>Response.json({stop_reason:'max_tokens',content:[{type:'text',text:'途中'}]}));assert.equal(incomplete.status,502);
+});
+test('client switching persists model choice without starting a generation and isolates late replies',async()=>{
+ let calls=[];const c=new CoachClient(async(url,opts)=>{calls.push({url,opts});return url.endsWith('/status')?Response.json({configured:true,model:'gpt-6-luna',models:[{id:'gpt-6-luna',configured:true},{id:'claude-haiku-5-5',configured:true},{id:'gemini-2.5-flash-lite',configured:false}]}):Response.json({text:'Lunaの返答',model:'luna-snapshot',selectedModel:'gpt-6-luna'})});
+ await c.init();assert.equal(c.model,'gpt-6-luna');assert.equal(c.selectModel('claude-haiku-5-5'),true);assert.equal(calls.length,1);assert.equal(c.selectModel('gemini-2.5-flash-lite'),false);
+ const reply=await c.request({kind:'question'},'gpt-6-luna');assert.equal(JSON.parse(calls[1].opts.body).model,'gpt-6-luna');c.remember('old',reply,'gpt-6-luna');assert.equal(c.cached('old'),null);c.selectModel('gpt-6-luna');assert.equal(c.cached('old').text,'Lunaの返答');
+});
