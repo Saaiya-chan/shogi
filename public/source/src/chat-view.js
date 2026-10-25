@@ -1,3 +1,4 @@
+import {COACH_REVISION} from './coach-contract.js';
 import {moveCommentary} from './move-coach.js';
 import {replyKey,replyMatches} from './coach-client.js';
 // Conversation state is scoped to a board position; requests are sent by main.js.
@@ -27,7 +28,7 @@ export function chatHTML({sfen,ply,turn,analysis,ico,moveLabel,p,start,records,h
   const contextKey=human+'|'+sfen;
   const messages=conversations.get(contextKey)||[];
   const entry=analysis?.entries[0];
-  const moves=records.slice(0,ply).map((record,i)=>{const m=moveCommentary(start,records,i,human);const before=i?records[i-1].sfen:start;const key=replyKey(human,before,record,coach?.model);const saved=record.aiCoach?.sfen===record.sfen&&record.aiCoach?.human===human?record.aiCoach:null;return{...m,ai:coach?.cached(key)||saved,job:moveStates?.get(key)}});
+  const moves=records.slice(0,ply).map((record,i)=>{const m=moveCommentary(start,records,i,human);const before=i?records[i-1].sfen:start;const key=replyKey(human,before,record,coach?.model);const saved=record.aiCoach?.revision===COACH_REVISION&&record.aiCoach?.sfen===record.sfen&&record.aiCoach?.human===human?record.aiCoach:null;return{...m,ai:coach?.cached(key)||saved,job:moveStates?.get(key)}});
   return `<section class="chat-panel" aria-label="双方の指し手の解説と質問">
   <div class="chat-preview-notice"><span class="preview-dot"></span><span>${coach?.blockedMessage?'APIの利用残高を確認してください':coach?.configured?'AIが一手ごとに解説':coach?.status==='checking'?'AIコーチの接続を確認':escapeHtml(coach?.selected?.label||'AIコーチ')+' · 未接続'}</span><small>${coach?.configured?'読み筋を添えて説明':coach?.status==='checking'?'接続を確認中…':'接続設定が必要です'}</small></div>
   ${coach?.blockedMessage?`<div class="api-billing-note">${escapeHtml(coach.blockedMessage)}</div>`:''}<div class="chat-context"><span class="context-board">${ico('LayoutDashboard')}</span><div><b>${simulation?simulation.sourcePly+'手目からの検討':ply===0?'開始局面':ply+'手目の局面'} <span>· ${turn}の手番</span></b><small>${simulation?'予想手順を検討中 · 実戦の棋譜は保持しています':'自分も、相手も。一手の意味をたどろう。'}</small></div><span class="attached-badge">${ico('Check')}${simulation?'検討中':'局面付き'}</span></div>

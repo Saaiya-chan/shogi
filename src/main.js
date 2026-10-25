@@ -1,3 +1,4 @@
+import {COACH_REVISION} from './coach-contract.js';
 import './style.css';
 import {CoachClient,replyKey} from './coach-client.js';
 import { DEMO_USI, moveCommentary, createSimulation, stepSimulation } from './move-coach.js';
@@ -99,7 +100,7 @@ async function queueMoveExplanation(index,retry=false){
  const cached=coach.cached(key);
  if(cached&&!retry){record.aiCoach={...cached,sfen:record.sfen,usi:record.usi,human};save();refreshCoaching();return}
  if(moveStates.get(key)?.status==='pending')return;
- if(record.aiCoach?.human===human&&record.aiCoach?.sfen===record.sfen&&record.aiCoach?.usi===record.usi&&!retry)return;
+ if(record.aiCoach?.revision===COACH_REVISION&&record.aiCoach?.human===human&&record.aiCoach?.sfen===record.sfen&&record.aiCoach?.usi===record.usi&&!retry)return;
  moveStates.set(key,{status:'pending'});refreshCoaching();
  const valid=()=>id===sessionId&&state.records[index]===record&&state.human===human&&coach.model===model;
  const job=async()=>{
@@ -126,7 +127,7 @@ async function askCoach(){
   const p=posFrom(sfen);const a=p.outcome()?null:await engine.analyze(sfen,Math.min(state.time,1500),3);
   const history=question.history;
   const last=state.cursor?state.records[state.cursor-1]:null;
-  if(!history.length&&last?.sfen===sfen&&last.aiCoach?.text)history.push({role:'assistant',text:last.aiCoach.text.slice(0,2500)});
+  if(!history.length&&last?.sfen===sfen&&last.aiCoach?.revision===COACH_REVISION&&last.aiCoach?.text)history.push({role:'assistant',text:last.aiCoach.text.slice(0,2500)});
   const reply=await coach.request({kind:'question',sfen,human,question:question.question,history,analysis:a,thought:state.draft||''},model);
   finishQuestion(key,question.id,reply);
  }catch(e){finishQuestion(key,question.id,null,e.name==='TimeoutError'?'返答に時間がかかりました。もう一度質問してください。':e.message)}
