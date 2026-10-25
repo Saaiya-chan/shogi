@@ -1,0 +1,13 @@
+import { cpSync, mkdirSync, copyFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+mkdirSync('public/engine',{recursive:true});
+for(const f of ['yaneuraou.k-p.js','yaneuraou.k-p.wasm','yaneuraou.k-p.worker.js']) copyFileSync('node_modules/@mizarjp/yaneuraou.k-p/lib/'+f,'public/engine/'+f);
+copyFileSync('node_modules/shogiops/LICENSE.txt','public/LICENSE.txt');
+copyFileSync('node_modules/lucide/LICENSE','public/lucide-LICENSE.txt');
+mkdirSync('public/source',{recursive:true});
+for(const dir of ['src','scripts','tests'])cpSync(dir,'public/source/'+dir,{recursive:true});
+mkdirSync('public/source/public/engine',{recursive:true});
+copyFileSync('public/engine/bridge.js','public/source/public/engine/bridge.js');
+for(const f of ['_headers','favicon.svg'])copyFileSync('public/'+f,'public/source/public/'+f);
+for(const f of ['package.json','package-lock.json','index.html','vite.config.js','README.md'])copyFileSync(f,'public/source/'+f);
+execFileSync('tar',['-czf','public/source.tar.gz','-C','public','source']);
