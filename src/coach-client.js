@@ -1,0 +1,8 @@
+export const replyKey=(human,before,record)=>[human,before,record.usi,record.sfen].join('|');
+export class CoachClient {
+ constructor(fetcher=(...args)=>fetch(...args)){this.fetcher=fetcher;this.configured=false;this.model='';this.status='checking';this.cache=new Map();try{for(const [key,value]of JSON.parse(localStorage.getItem('kito-ai-replies-v1')||'[]'))if(typeof value?.text==='string'&&value.text.length<6000)this.cache.set(key,value)}catch{}}
+ async init(){try{const r=await this.fetcher('/api/coach/status',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();this.configured=data.configured===true;this.model=String(data.model||'');this.status=this.configured?'ready':'unconfigured'}catch{this.status='unavailable'}return this.configured}
+ async request(body){const r=await this.fetcher('/api/coach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(55000)});let data;try{data=await r.json()}catch{throw Error('AIコーチの返答を読み取れませんでした。')}if(!r.ok){if(data.code==='insufficient_quota')this.blockedMessage=data.error;const error=Error(data.error||'AIコーチに接続できませんでした。');error.code=data.code;throw error}if(typeof data.text!=='string'||!data.text.trim())throw Error('AIコーチの返答が空でした。');return data}
+ cached(key){const value=this.cache.get(key);return value&&(value.configurationModel||value.model)===this.model?value:null}
+ remember(key,reply){this.cache.set(key,{...reply,configurationModel:this.model});while(this.cache.size>100)this.cache.delete(this.cache.keys().next().value);try{localStorage.setItem('kito-ai-replies-v1',JSON.stringify([...this.cache]))}catch{}}
+}

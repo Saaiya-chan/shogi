@@ -10,5 +10,5 @@ for(const dir of ['src','scripts','tests','worker'])cpSync(dir,'public/source/'+
 mkdirSync('public/source/public/engine',{recursive:true});
 copyFileSync('public/engine/bridge.js','public/source/public/engine/bridge.js');
 for(const f of ['_headers','favicon.svg'])copyFileSync('public/'+f,'public/source/public/'+f);
-for(const f of ['package.json','package-lock.json','index.html','vite.config.js','README.md'])copyFileSync(f,'public/source/'+f);
+for(const f of ['package.json','package-lock.json','index.html','vite.config.js','README.md','.env.example'])copyFileSync(f,'public/source/'+f);
 execFileSync('tar',['-czf','public/source.tar.gz','-C','public','source']);
