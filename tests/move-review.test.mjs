@@ -49,3 +49,12 @@ test('the reason prompt gets the calculated judgement and a separate legal alter
  assert.equal(c.moveReview.judgement,'悪手');assert.equal(c.moveReview.loss,500);assert.equal(c.moveReview.bestMove,'△３四歩');assert.equal(c.moveReview.beforeAnalysis.entries[0].steps[0].move,'△３四歩');
  assert.throws(()=>prepareCoachInput({kind:'move',human:'sente',beforeSfen:r.beforeSfen,sfen:r.sfen,usi:r.usi,analysis:r.after,moveReview:{...r,usi:'3c3d'}}));
 });
+
+test('capture evidence states the moving side, origin, destination and the side gaining a hand piece',()=>{
+ const g=parsePositionInput('position startpos moves 7g7f 3c3d 2g2f 2b8h+ 2f2e');const before=g.records[3].sfen,record=g.records[4];
+ const r=createMoveReview(before,record,raw(before,100,['7i8h']),raw(record.sfen,3500,['8h8i']));
+ const c=prepareCoachInput({kind:'move',human:'sente',beforeSfen:before,sfen:record.sfen,usi:record.usi,analysis:r.after,moveReview:r});
+ const better=c.moveReview.beforeAnalysis.entries[0].steps[0],reply=c.analysis.entries[0].steps[0];
+ assert.deepEqual([better.actor,better.from,better.to],['先手','7九','8八']);assert.equal(better.captured.handGainSide,'先手');
+ assert.deepEqual([reply.actor,reply.from,reply.to],['後手','8八','8九']);assert.equal(reply.captured.side,'先手');assert.equal(reply.captured.handGainSide,'後手');
+});
