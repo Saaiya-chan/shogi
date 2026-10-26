@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {CoachClient} from '../src/coach-client.js';
+import {CoachClient,moveKey} from '../src/coach-client.js';
 import {formatCoachText} from '../src/coach-text.js';
 import {chatHTML} from '../src/chat-view.js';
 import {INITIAL,parsePositionInput} from '../src/game.js';
@@ -21,14 +21,14 @@ test('coordinate references omit square suffixes and movement counts read natura
 test('every move offers an explicit explanation without showing authored demo explanations automatically',()=>{
  const game=parsePositionInput('position startpos moves 7g7f 8c8d');const coach={configured:true,model:'test',cached:()=>null,autoExplain:false};
  const html=chatHTML({sfen:game.records.at(-1).sfen,ply:2,turn:'先手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach,moveStates:new Map()});
- assert.equal((html.match(/data-explain=/g)||[]).length,2);assert.ok(html.includes('「解析」でこの手を判定'));assert.ok(!html.includes('サンプル解説'));
+ assert.equal((html.match(/data-analyze-move=/g)||[]).length,2);assert.ok(html.includes('「解析」で判定と理由を確認'));assert.ok(!html.includes('サンプル解説'));
 });
 
 test('OFF never reveals a cached explanation for a newly played move without pressing its button',()=>{
  const game=parsePositionInput('position startpos moves 7g7f 8c8d');
  const coach={configured:true,model:'test',cached:()=>({text:'自動で見えてはいけない過去の解説',model:'test',revision:2}),autoExplain:false};
  const html=chatHTML({sfen:game.records.at(-1).sfen,ply:2,turn:'先手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach,moveStates:new Map()});
- assert.ok(!html.includes('自動で見えてはいけない過去の解説'));assert.equal((html.match(/>解説<\/button>/g)||[]).length,2);
+ assert.ok(!html.includes('自動で見えてはいけない過去の解説'));assert.equal((html.match(/>解析<\/button>/g)||[]).length,2);
 });
 test('automatic requests are rejected at the transport boundary while OFF',async()=>{
  let calls=0;const c=new CoachClient(()=>{calls++;return Promise.resolve(Response.json({text:'unexpected'}))});
@@ -57,8 +57,16 @@ test('legacy explanations from before move reviews are not revealed automaticall
  assert.ok(!html.includes('以前の自動解説'));
 });
 
-test('unanalysed moves show an Analyse button and disable explanations, including legacy automatic results',()=>{
+test('unanalysed moves offer one enabled Analyse action beside the move and hide the bubble, including legacy automatic results',()=>{
  const game=parsePositionInput('position startpos moves 7g7f');game.records[0].moveReview={signature:'old-automatic-result'};
  const html=chatHTML({sfen:game.records[0].sfen,ply:1,turn:'後手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach:{configured:true,model:'test'},moveStates:new Map()});
- assert.ok(html.includes('未解析'));assert.ok(html.includes('data-review="1" >解析</button>'));assert.ok(html.includes('data-regenerate="false" disabled>解説</button>'));assert.ok(!html.includes('さらに深く解析'));
+ assert.ok(html.includes('data-analyze-move="1"'));assert.ok(html.includes('data-regenerate="false" >解析</button>'));assert.ok(!html.includes('data-review='));assert.ok(!html.includes('data-explain='));assert.ok(!html.includes('さらに深く解析'));assert.ok(!html.includes('class="chat-bubble"'));assert.ok(!html.includes('class="chat-message coach"'));assert.ok(html.indexOf('data-analyze-move=')>html.indexOf('<b>▲７六歩</b>'));assert.ok(html.indexOf('data-analyze-move=')<html.indexOf('<small>1手目</small>'));
+});
+
+
+test('only a requested move reveals its pending bubble; the adjacent move stays compact',()=>{
+ const game=parsePositionInput('position startpos moves 7g7f 8c8d'),model='test';
+ const moveStates=new Map([[moveKey('sente',INITIAL,game.records[0],model),{status:'pending'}]]);
+ const html=chatHTML({sfen:game.records[1].sfen,ply:2,turn:'先手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach:{configured:true,model},moveStates});
+ assert.equal((html.match(/class="chat-message coach"/g)||[]).length,1);assert.equal((html.match(/data-analyze-move=/g)||[]).length,2);assert.ok(html.includes('解析中…'));
 });
