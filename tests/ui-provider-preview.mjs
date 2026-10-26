@@ -1,7 +1,8 @@
 // Local UI fixture. Provider responses are simulated; this never calls an external API.
+import {readFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import worker from '../dist/server/index.js';
-const calls=[];
+const calls=[],engineCalls=[];
 globalThis.fetch=async(url,opts)=>{
  const body=JSON.parse(opts.body);
  let provider,context,model;
@@ -17,6 +18,13 @@ globalThis.fetch=async(url,opts)=>{
 };
 createServer(async(req,res)=>{
  try{
+  if(req.url==='/__test/engine'&&req.method==='POST'){engineCalls.push(Buffer.concat(await Array.fromAsync(req)).toString());res.writeHead(204);res.end();return}
+  if(req.url==='/__test/engine'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(engineCalls));return}
+  if(req.url==='/engine/bridge.js'){
+   const bridge=await readFile(new URL('../public/engine/bridge.js',import.meta.url),'utf8');
+   res.writeHead(200,{'Content-Type':'application/javascript','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Opener-Policy':'same-origin'});
+   res.end("self.addEventListener('message',({data})=>{if(typeof data==='string'&&data.startsWith('go '))void fetch('/__test/engine',{method:'POST',body:data})});\n"+bridge);return;
+  }
   if(req.url==='/__test/requests'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(calls));return}
   const request=new Request('http://'+req.headers.host+req.url,{method:req.method,headers:req.headers,...(!['GET','HEAD'].includes(req.method)?{body:Buffer.concat(await Array.fromAsync(req))}:{})});
   const response=await worker.fetch(request,{OPENAI_API_KEY:'test-only',GEMINI_API_KEY:'test-only',ANTHROPIC_API_KEY:'test-only'});

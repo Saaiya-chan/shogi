@@ -21,7 +21,7 @@ test('coordinate references omit square suffixes and movement counts read natura
 test('every move offers an explicit explanation without showing authored demo explanations automatically',()=>{
  const game=parsePositionInput('position startpos moves 7g7f 8c8d');const coach={configured:true,model:'test',cached:()=>null,autoExplain:false};
  const html=chatHTML({sfen:game.records.at(-1).sfen,ply:2,turn:'先手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach,moveStates:new Map()});
- assert.equal((html.match(/data-explain=/g)||[]).length,2);assert.ok(html.includes('やねうら王で双方の手を判定'));assert.ok(!html.includes('サンプル解説'));
+ assert.equal((html.match(/data-explain=/g)||[]).length,2);assert.ok(html.includes('「解析」でこの手を判定'));assert.ok(!html.includes('サンプル解説'));
 });
 
 test('OFF never reveals a cached explanation for a newly played move without pressing its button',()=>{
@@ -55,4 +55,10 @@ test('legacy explanations from before move reviews are not revealed automaticall
  const game=parsePositionInput('position startpos moves 7g7f');game.records[0].aiCoach={revision:2,human:'sente',sfen:game.records[0].sfen,text:'以前の自動解説',model:'test'};
  const html=chatHTML({sfen:game.records[0].sfen,ply:1,turn:'後手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach:{configured:true,model:'test'},moveStates:new Map()});
  assert.ok(!html.includes('以前の自動解説'));
+});
+
+test('unanalysed moves show an Analyse button and disable explanations, including legacy automatic results',()=>{
+ const game=parsePositionInput('position startpos moves 7g7f');game.records[0].moveReview={signature:'old-automatic-result'};
+ const html=chatHTML({sfen:game.records[0].sfen,ply:1,turn:'後手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach:{configured:true,model:'test'},moveStates:new Map()});
+ assert.ok(html.includes('未解析'));assert.ok(html.includes('data-review="1" >解析</button>'));assert.ok(html.includes('data-regenerate="false" disabled>解説</button>'));assert.ok(!html.includes('さらに深く解析'));
 });
