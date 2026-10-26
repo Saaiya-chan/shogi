@@ -21,7 +21,7 @@ test('coordinate references omit square suffixes and movement counts read natura
 test('every move offers an explicit explanation without showing authored demo explanations automatically',()=>{
  const game=parsePositionInput('position startpos moves 7g7f 8c8d');const coach={configured:true,model:'test',cached:()=>null,autoExplain:false};
  const html=chatHTML({sfen:game.records.at(-1).sfen,ply:2,turn:'先手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach,moveStates:new Map()});
- assert.equal((html.match(/data-explain=/g)||[]).length,2);assert.ok(html.includes('解説したい手を選ぶ'));assert.ok(!html.includes('サンプル解説'));
+ assert.equal((html.match(/data-explain=/g)||[]).length,2);assert.ok(html.includes('やねうら王で双方の手を判定'));assert.ok(!html.includes('サンプル解説'));
 });
 
 test('OFF never reveals a cached explanation for a newly played move without pressing its button',()=>{

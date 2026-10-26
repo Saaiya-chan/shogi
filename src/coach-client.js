@@ -1,5 +1,6 @@
 import {COACH_REVISION} from './coach-contract.js';
-export const replyKey=(human,before,record,model='')=>[human,before,record.usi,record.sfen,model].join('|');
+export const moveKey=(human,before,record,model='')=>[human,before,record.usi,record.sfen,model].join('|');
+export const replyKey=(human,before,record,model='')=>moveKey(human,before,record,model)+'|'+(record.moveReview?.signature||'');
 export const replyMatches=(reply,model)=>!!reply&&reply.revision===COACH_REVISION&&(reply.configurationModel||reply.selectedModel||reply.model)===model;
 export class CoachClient {
  constructor(fetcher=(...args)=>fetch(...args)){
