@@ -23,7 +23,7 @@ function simulationController(sim,ico){
     <div class="simulation-heading"><span>${ico('Eye')}${sim.better?'より良い手をシミュレーション':'予想手順をシミュレーション'}</span><small>${sim.better?(sim.timeMs/1000)+'秒解析の候補':sim.authored?'サンプル手順':'エンジンの読み筋'}</small></div>
     <div class="simulation-line">${sim.line.map((m,i)=>`<button data-sim-step="${i+1}" class="${sim.step===i+1?'current':''}" aria-label="予想手順 ${i+1}手目 ${escapeHtml(m.label)}">${escapeHtml(m.label)}</button>`).join('<span>→</span>')}</div>
     <div class="simulation-controls"><button class="icon-btn" data-action="sim-first" aria-label="予想手順の開始局面へ" ${sim.step===0?'disabled':''}>${ico('ChevronsLeft')}</button><button class="icon-btn" data-action="sim-prev" aria-label="予想手順を1手戻す" ${sim.step===0?'disabled':''}>${ico('ChevronLeft')}</button><button class="simulation-play" data-action="sim-play" aria-label="${sim.playing?'予想手順を停止':'予想手順を再生'}">${ico(sim.playing?'Pause':'Play')}</button><button class="icon-btn" data-action="sim-next" aria-label="予想手順を1手進める" ${sim.step>=sim.line.length?'disabled':''}>${ico('ChevronRight')}</button><span class="simulation-progress">${sim.step}<small> / ${sim.line.length} 手</small></span></div>
-    <div class="simulation-bottom"><span>${sim.step===0?'開始局面':sim.line[sim.step-1].label} ${sim.playing?'· 再生中':sim.step===sim.line.length?'· 手順の最後':''}</span><button data-action="pv-close">対局へ戻る ${ico('RotateCcw')}</button></div>
+    <div class="simulation-bottom"><span>${sim.step===0?'開始局面':sim.line[sim.step-1].label} ${sim.playing?'· 再生中':sim.step===sim.line.length?'· 手順の最後':''}</span><button class="return-to-game" data-action="pv-close">対局へ戻る ${ico('RotateCcw')}</button></div>
   </div>`;
 }
 function reviewHTML(m){

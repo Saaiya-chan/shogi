@@ -71,3 +71,10 @@ test('opening the bishop diagonal and moving a rook pawn provide computed effect
 test('cached explanations from an older grounding revision are not reused',()=>{
  const c=new CoachClient();c.model='gpt-6-luna';c.cache.set('old',{text:'古い解説',model:'gpt-6-luna',revision:1});assert.equal(c.cached('old'),null);
 });
+
+
+test('tokin has a Japanese name in the position and actual move facts sent to the coach',()=>{
+ const game=parsePositionInput('position sfen 4k4/9/9/4+P4/9/9/9/9/4K4 b - 1 moves 5d5c');
+ const c=prepareCoachInput({kind:'move',human:'sente',beforeSfen:game.start,sfen:game.records[0].sfen,usi:'5d5c'});
+ assert.equal(c.position.pieces.find(p=>p.square==='5三').piece,'と');assert.equal(c.playedMove.before.pieces.find(p=>p.square==='5四').piece,'と');assert.ok(!JSON.stringify(c).includes('undefined'));
+});

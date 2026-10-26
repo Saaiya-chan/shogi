@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INITIAL,posFrom,parseUsi,makeSfen,legalMoves,pvLine,parsePositionInput,parseInfo,blackScore,factsForMove,repetitionOutcome } from '../src/game.js';
+import { INITIAL,kanji,posFrom,parseUsi,makeSfen,legalMoves,pvLine,parsePositionInput,parseInfo,blackScore,factsForMove,repetitionOutcome } from '../src/game.js';
 const play=(p,usi)=>{const m=parseUsi(usi);assert.ok(p.isLegal(m),usi);return p.play(m)};
 test('starting board: 40 pieces, 30 legal moves and immutable move application',()=>{const p=posFrom(INITIAL);assert.equal(p.board.occupied.size(),40);assert.equal(legalMoves(p).length,30);const next=play(p,'7g7f');assert.equal(makeSfen(p),INITIAL);assert.equal(next.turn,'gote');assert.equal(next.board.pieceAt(parseUsi('7g7f').to).role,'pawn');assert.equal(next.board.pieceAt(parseUsi('7g7f').from),undefined)});
 test('bishop capture, promoted piece and capture to hand round trip',()=>{let p=posFrom(INITIAL);for(const u of ['7g7f','3c3d','8h2b+','3a2b'])p=play(p,u);assert.equal(p.hands.color('sente').get('bishop'),1);assert.equal(p.hands.color('gote').get('bishop'),1);assert.equal(makeSfen(posFrom(makeSfen(p))),makeSfen(p));assert.equal(p.isLegal(parseUsi('B*5e')),true)});
@@ -13,3 +13,13 @@ test('USI evaluation parser ignores bound scores and converts gote perspective',
 test('facts only describe actual capture / promotion / checks',()=>{const g=parsePositionInput('position startpos moves 7g7f 3c3d');const p=posFrom(g.records.at(-1).sfen);const facts=factsForMove(p,{pv:['8h2b+']});assert.ok(facts.some(x=>x.includes('角を取り')));assert.ok(facts.some(x=>x.includes('角を成り')))});
 test('four repeated positions are a draw',()=>{const start='4k4/9/9/9/9/9/9/9/4K4 b - 1';let p=posFrom(start);const records=[];for(let n=0;n<3;n++)for(const u of ['5i6i','5a6a','6i5i','6a5a']){p=play(p,u);records.push({sfen:makeSfen(p),usi:u})}assert.equal(repetitionOutcome(start,records)?.result,'repetition');assert.equal(repetitionOutcome(start,records.slice(0,-1)),null)});
 test('continuous checking repetition loses for checker',()=>{const start='4k4/5R3/9/9/9/9/9/9/K8 b - 1';let p=posFrom(start);const records=[];for(let n=0;n<3;n++)for(const u of ['4b5b','5a4a','5b4b','4a5a']){p=play(p,u);records.push({sfen:makeSfen(p),usi:u})}const r=repetitionOutcome(start,records);assert.equal(r?.result,'perpetual-check');assert.equal(r?.winner,'gote')});
+
+
+test('all standard promoted pieces have Japanese labels, including tokin, and promoted material is counted',()=>{
+ for(const [token,role,label]of [['P','tokin','と'],['L','promotedlance','杏'],['N','promotedknight','圭'],['S','promotedsilver','全'],['B','horse','馬'],['R','dragon','龍']]){
+  const p=posFrom('k8/9/9/4+'+token+'4/9/9/9/9/4K4 b - 1');const piece=p.board.pieceAt(parseUsi('5d5e').from);
+  assert.equal(piece.role,role);assert.equal(kanji[piece.role],label);
+ }
+ const p=posFrom('4k4/9/9/4+P4/9/9/9/9/4K4 b - 1');assert.ok(factsForMove(p,{pv:['5d5c']}).every(x=>!x.includes('undefined')));
+ assert.throws(()=>posFrom('4k4/9/9/4+P4/9/9/9/9/4K4 b 18P 1'));
+});
