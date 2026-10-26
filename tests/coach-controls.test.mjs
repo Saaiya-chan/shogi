@@ -50,3 +50,9 @@ test('an OFF setting from another tab is checked immediately before an automatic
  const old=globalThis.localStorage;const data=new Map();globalThis.localStorage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};
  try{let calls=0;const c=new CoachClient(()=>{calls++;throw Error()});c.setAutoExplain(true);const generation=c.autoGeneration;data.set('kito-coach-auto-explain','false');await assert.rejects(c.request({kind:'move'},'test',{automatic:true,generation}),{name:'AbortError'});assert.equal(calls,0);assert.equal(c.autoExplain,false)}finally{if(old===undefined)delete globalThis.localStorage;else globalThis.localStorage=old}
 });
+
+test('legacy explanations from before move reviews are not revealed automatically on restore',()=>{
+ const game=parsePositionInput('position startpos moves 7g7f');game.records[0].aiCoach={revision:2,human:'sente',sfen:game.records[0].sfen,text:'以前の自動解説',model:'test'};
+ const html=chatHTML({sfen:game.records[0].sfen,ply:1,turn:'後手',ico:()=>'',start:INITIAL,records:game.records,human:'sente',coach:{configured:true,model:'test'},moveStates:new Map()});
+ assert.ok(!html.includes('以前の自動解説'));
+});
